@@ -178,7 +178,10 @@ def parse(element, queryables, dbtype, nsmap, orm='sqlalchemy'):
 
             if (child.tag != util.nspath_eval('ogc:PropertyIsBetween', nsmap)):
                 pval = child.find(util.nspath_eval('ogc:Literal', nsmap)).text
-                pvalue = pval.replace(wildcard, '%').replace(singlechar, '_')
+                if pname == 'anytext' and dbtype in ['postgresql', 'postgresql+postgis']:
+                    pvalue = pval.replace(wildcard, '').replace(singlechar, '')
+                else:
+                    pvalue = pval.replace(wildcard, '%').replace(singlechar, '_')
 
             com_op = _get_comparison_operator(child)
             LOGGER.debug('Comparison operator: %s' % com_op)
@@ -208,6 +211,10 @@ def parse(element, queryables, dbtype, nsmap, orm='sqlalchemy'):
                     if fname is not None:
                         queries.append("%s is null or not %s(%s) %s %s" %
                                        (pname, fname, pname, com_op, assign_param()))
+                    elif pname == 'anytext' and dbtype in ['postgresql', 'postgresql+postgis']:
+                        queries.append(
+                            "anytext is null or not plainto_tsquery(%s) && to_tsvector(anytext)" %
+                            assign_param())
                     else:
                         queries.append("%s is null or not %s %s %s" %
                                        (pname, pname, com_op, assign_param()))
@@ -215,6 +222,10 @@ def parse(element, queryables, dbtype, nsmap, orm='sqlalchemy'):
                     if fname is not None:
                         queries.append("%s(%s) %s %s" %
                                        (fname, pname, com_op, assign_param()))
+                    elif pname == 'anytext' and dbtype in ['postgresql', 'postgresql+postgis']:
+                        queries.append(
+                            "plainto_tsquery(%s) && to_tsvector(anytext)" %
+                            assign_param())
                     else:
                         queries.append("%s %s %s" % (pname, com_op, assign_param()))
 
